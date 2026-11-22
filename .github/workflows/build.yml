@@ -281,17 +281,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ([ "$RUNNER_OS" == "Windows" ] && [ "$RUNNER_ARCH" == "ARM64" ]); then
-            # custom cryptography wheel for win arm64 since the project doesn't provide one:
-            # https://github.com/pyca/cryptography/issues/14293
-            gh release download --repo "jay0lee/cryptography-wheels" --pattern "*[^t]-win_arm64.whl" --clobber
-            "$PYTHON" -m pip install cryptography-*.whl
-          elif [[ "$RUNNER_OS" == "macOS" && "$RUNNER_ARCH" == "x86_64" ]]; then
-            # custom cryptography wheel for macos x86_64 since it's no longer standard
-            gh release download --repo "jay0lee/cryptography-wheels" --pattern "*[^t]-macosx_15_0_x86_64.whl" --clobber
-            "$PYTHON" -m pip install cryptography-*.whl
-          fi
+          mkdir -p ./cryptography-wheels
+          gh release download --repo "jay0lee/cryptography-wheels" --pattern "*.whl" --dir ./cryptography-wheels --clobber
           "$PYTHON" -m pip install ..[yubikey]
+          "$PYTHON" -m pip install --no-index --no-deps --force-reinstall --find-links ./cryptography-wheels cryptography
+          "$PYTHON" -c '
+          from cryptography.hazmat.backends.openssl.backend import backend
+          loaded = backend.openssl_version_text()
+          linked = backend._ffi.string(backend._lib.OPENSSL_VERSION_TEXT).decode("ascii")
+          print(f"cryptography backend: loaded={loaded!r}, linked={linked!r}")
+          assert "BoringSSL" in loaded and "BoringSSL" in linked, f"Expected BoringSSL cryptography backend, got {loaded!r} / {linked!r}"
+          '
+          rm -rf ./cryptography-wheels
 
       - name: Install PyInstaller
         if: matrix.goal == 'build'
@@ -585,6 +586,19 @@ jobs:
             exit 1
           fi
           echo "We successfully compiled Python ${this_python} and BoringSSL ${this_boringssl}"
+          echo "Verifying built GAM artifact contains no OpenSSL shared libraries..."
+          "$PYTHON" - <<'PYEOF'
+          import os, pathlib, re, sys
+          toc = pathlib.Path("build/gam/Analysis-00.toc").read_text(encoding="utf-8", errors="replace")
+          pat = re.compile(r"(?:^|[/\\\\'\"])(?:lib)?(?:ssl|crypto)[-_0-9.]*\.(?:so(?:\.[0-9]+)*|dylib|dll)(?:['\"]|$)", re.IGNORECASE | re.MULTILINE)
+          hits = pat.findall(toc)
+          assert not hits, f"Found unexpected OpenSSL shared libraries in Analysis-00.toc: {hits}"
+          gampath = pathlib.Path(os.environ["gampath"])
+          if gampath.is_dir():
+              disk_hits = [str(p) for p in gampath.rglob("*") if p.is_file() and re.match(r"^(?:lib)?(?:ssl|crypto)[-_0-9.]*\.(?:so(?:\.[0-9]+)*|dylib|dll)$", p.name, re.I)]
+              assert not disk_hits, f"Found unexpected OpenSSL shared libraries in {gampath}: {disk_hits}"
+          print("Verified: zero OpenSSL shared libraries in GAM PyInstaller artifact.")
+          PYEOF
 
       - name: Live API tests
         if: (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
