@@ -281,18 +281,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p ./cryptography-wheels
-          gh release download --repo "jay0lee/cryptography-wheels" --pattern "*.whl" --dir ./cryptography-wheels --clobber
+          if [[ "${{ matrix.freethread }}" != "true" ]]; then
+            mkdir -p ./cryptography-wheels
+            gh release download --repo "jay0lee/cryptography-wheels" --pattern "*.whl" --dir ./cryptography-wheels --clobber
+            "$PYTHON" -m pip install --no-index --no-deps --find-links ./cryptography-wheels cryptography
+            rm -rf ./cryptography-wheels
+          fi
           "$PYTHON" -m pip install ..[yubikey]
-          "$PYTHON" -m pip install --no-index --no-deps --force-reinstall --find-links ./cryptography-wheels cryptography
-          "$PYTHON" -c '
+          if [[ "${{ matrix.freethread }}" != "true" ]]; then
+            "$PYTHON" -c '
           from cryptography.hazmat.backends.openssl.backend import backend
           loaded = backend.openssl_version_text()
           linked = backend._ffi.string(backend._lib.OPENSSL_VERSION_TEXT).decode("ascii")
           print(f"cryptography backend: loaded={loaded!r}, linked={linked!r}")
           assert "BoringSSL" in loaded and "BoringSSL" in linked, f"Expected BoringSSL cryptography backend, got {loaded!r} / {linked!r}"
           '
-          rm -rf ./cryptography-wheels
+          fi
 
       - name: Install PyInstaller
         if: matrix.goal == 'build'
