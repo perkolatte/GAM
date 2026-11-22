@@ -137,10 +137,10 @@ jobs:
           service_account: github-actions-testing-for-gam@gam-project-wyo-lub-ivl.iam.gserviceaccount.com
           access_token_scopes: https://www.googleapis.com/auth/iam
 
-      - name: Setup Latest Python and OpenSSL
+      - name: Setup Latest Python and BoringSSL
         if: matrix.goal == 'build'
         id: setup-python
-        uses: jay0lee/python-openssl-latest@v1
+        uses: jay0lee/python-boringssl-latest@v1
 
       - name: Use pre-compiled Python for testing
         if: matrix.python != ''
@@ -250,7 +250,7 @@ jobs:
           fi
           echo "staticx=${staticx}" >> $GITHUB_ENV
           echo "COMPILED_PYTHON_VERSION=${{ steps.setup-python.outputs.python-version }}" >> $GITHUB_ENV
-          echo "COMPILED_OPENSSL_VERSION=${{ steps.setup-python.outputs.openssl-version }}" >> $GITHUB_ENV
+          echo "COMPILED_BORINGSSL_VERSION=${{ steps.setup-python.outputs.boringssl-version }}" >> $GITHUB_ENV
 
       - name: Run Python
         run: |
@@ -308,9 +308,9 @@ jobs:
           if [[ "${RUNNER_OS}" == "macOS" ]]; then
             # Tell our gam.spec to use our code sign certificate
             export codesign_identity="Jay Lee"
-           # Point to our compiled OpenSSL so PyInstaller picks it up
+           # Point to our compiled BoringSSL so PyInstaller picks it up
            # instead of Homebrew's version, without breaking pip cryptography
-            export DYLD_LIBRARY_PATH="${OPENSSL_INSTALL_PATH}/lib:${DYLD_LIBRARY_PATH:-}"
+            export DYLD_LIBRARY_PATH="${BORINGSSL_INSTALL_PATH}/lib:${DYLD_LIBRARY_PATH:-}"
           elif [[ "${RUNNER_OS}" == "Windows" ]]; then
             # Work around issue where PyInstaller picks up python3.dll from other Python versions
             # https://github.com/pyinstaller/pyinstaller/issues/7102
@@ -577,14 +577,14 @@ jobs:
             echo "ERROR: Tried to compile Python ${COMPILED_PYTHON_VERSION} but ended up with ${this_python}"
             exit 1
           fi
-          export openssl_line=$(echo -e "${voutput}" | grep "OpenSSL ")
-          export openssl_arr=($openssl_line)
-          export this_openssl="${openssl_arr[1]}"
-          if [[ "${this_openssl}" != "${COMPILED_OPENSSL_VERSION}" ]]; then
-            echo "ERROR: Tried to compile OpenSSL ${COMPILED_OPENSSL_VERSION} but ended up with ${this_openssl}"
+          export boringssl_line=$(echo -e "${voutput}" | grep "^BoringSSL ")
+          export boringssl_arr=($boringssl_line)
+          export this_boringssl="${boringssl_arr[1]}"
+          if [[ "${this_boringssl}" != "${COMPILED_BORINGSSL_VERSION}" ]]; then
+            echo "ERROR: Tried to compile BoringSSL ${COMPILED_BORINGSSL_VERSION} but ended up with ${this_boringssl}"
             exit 1
           fi
-          echo "We successfully compiled Python ${this_python} and OpenSSL ${this_openssl}"
+          echo "We successfully compiled Python ${this_python} and BoringSSL ${this_boringssl}"
 
       - name: Live API tests
         if: (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
