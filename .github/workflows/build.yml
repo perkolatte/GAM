@@ -281,14 +281,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [[ "${{ matrix.freethread }}" != "true" ]]; then
+          if [[ "${{ matrix.freethreaded }}" != "true" ]]; then
             mkdir -p ./cryptography-wheels
             gh release download --repo "jay0lee/cryptography-wheels" --pattern "*.whl" --dir ./cryptography-wheels --clobber
             "$PYTHON" -m pip install --no-index --no-deps --find-links ./cryptography-wheels cryptography
             rm -rf ./cryptography-wheels
           fi
           "$PYTHON" -m pip install ..[yubikey]
-          if [[ "${{ matrix.freethread }}" != "true" ]]; then
+          if [[ "${{ matrix.freethreaded }}" != "true" ]]; then
             "$PYTHON" -c '
           from cryptography.hazmat.backends.openssl.backend import backend
           loaded = backend.openssl_version_text()
